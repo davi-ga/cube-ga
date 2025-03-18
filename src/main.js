@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import {createCube,createPlane} from './utils/objects.js';
 import {createControls} from './utils/controls.js';
-
+import { CubeCamera, WebGLCubeRenderTarget, MeshBasicMaterial } from 'three';
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
@@ -26,6 +26,19 @@ const plane = createPlane(5, 5);
 plane.position.set(0, 0, 0); 
 scene.add( plane ); 
 
+const cubeRenderTarget = new WebGLCubeRenderTarget(256, { format: THREE.RGBAFormat });
+const cubeCamera = new CubeCamera(0.1, 1000, cubeRenderTarget);
+
+scene.add(cubeCamera);
+
+// Criação do plano com material reflexivo
+const reflectiveMaterial = new MeshBasicMaterial({
+  envMap: cubeRenderTarget.texture,
+});
+plane.material = reflectiveMaterial;
+plane.position.set(0, 0, 0);
+scene.add(plane);
+
 const ambientLight = new THREE.AmbientLight( 0xffffff, 0.5 ); // Ajuste a intensidade da luz ambiente
 scene.add( ambientLight );
 
@@ -39,9 +52,11 @@ camera.lookAt(cube.position);
 let time = 0;
 
 function animate() {
-  controls.update();
 
-  // time += 0.01;
-  // camera.position.z = Math.cos(time) * 10;
+  // Atualize o CubeCamera
+  plane.visible = false; // Esconda o plano para evitar capturar a si mesmo
+  cubeCamera.update(renderer, scene);
+  plane.visible = true;
+
   renderer.render(scene, camera);
 }
