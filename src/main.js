@@ -58,6 +58,7 @@ uniform sampler2D u_mirrorTexture; // Textura da cena renderizada
 uniform sampler2D u_waterTexture; // Textura da água
 uniform float u_time;
 uniform vec3 u_cameraPosition;
+uniform float u_depthFactor; // Fator de profundidade para ajustar o deslocamento
 
 in vec2 vUv; // GLSL 3.0 input variable
 out vec4 fragColor; // Output variable for fragment color
@@ -66,8 +67,9 @@ void main() {
     vec2 uv = vUv;
 
     // Simule o deslocamento da textura
-    uv.x += sin(uv.y * 10.0 + u_time * 2.0) * 0.02;
-    uv.y += cos(uv.x * 10.0 + u_time * 2.0) * 0.02;
+    float depthEffect = 1.0 - u_depthFactor; // Reduz o deslocamento com base no fator de profundidade
+    uv.x += sin(uv.y * 10.0 + u_time * 2.0) * 0.02 * depthEffect;
+    uv.y += cos(uv.x * 10.0 + u_time * 2.0) * 0.02 * depthEffect;
 
     // Calcule a direção da refração
     vec3 viewDir = normalize(vec3(uv, 1.0) - u_cameraPosition);
@@ -75,7 +77,7 @@ void main() {
     vec3 refractedDir = refract(viewDir, normal, 1.0 / 1.33); // Índice de refração da água
 
     // Ajuste as coordenadas UV com base na direção refratada
-    vec2 refractedUV = uv + refractedDir.xy * 0.05;
+    vec2 refractedUV = uv + refractedDir.xy * 0.05 * depthEffect;
 
     // Aplique a textura renderizada com o deslocamento e refração
     vec4 sceneColor = texture(u_mirrorTexture, refractedUV);
@@ -108,10 +110,10 @@ const planeRefraction = new THREE.Mesh(
       u_waterTexture: { value: waterTexture }, // Textura da água
       u_time: { value: 5.0 },
       u_cameraPosition: { value: camera.position },
+      u_depthFactor: { value: 0.5 }, // Ajuste este valor para controlar o efeito
     },
   })
 );
-
 planeRefraction.position.set(0, 0, 0);
 planeRefraction.rotateY(Math.PI/2);
 
@@ -129,22 +131,43 @@ camera.position.set(cube.position.x+15, cube.position.y , cube.position.z);
 camera.lookAt(cube.position);
 
 function updateMirrorCamera(mainCamera, mirror, mirrorCamera) {
-  let normal = new THREE.Vector3(0, 0, 1); // Normal of the Plane
-  normal.applyQuaternion(planeRefraction.quaternion); // Adjust the rotation of the plane
-  let d = normal.dot(planeRefraction.position);
+  // Use uma normal fixa no espaço do mundo
+  const normal = new THREE.Vector3(0, 1, 0); // Normal fixa apontando para cima
 
-  // Reflection of the Camera Position
-  let mirroredPosition = camera.position.clone();
-  mirroredPosition.sub(
-    normal.clone().multiplyScalar(2 * (camera.position.dot(normal) - d))
+  // Distância do plano à origem
+  const d = -normal.dot(mirror.position);
+
+  // Reflete a posição da câmera principal
+  const cameraPosition = mainCamera.position.clone();
+  const distanceToPlane = normal.dot(cameraPosition) + d;
+  const reflectedPosition = cameraPosition.clone().sub(
+    normal.clone().multiplyScalar(2 * distanceToPlane)
   );
 
-  mirrorCamera.position.copy(mirroredPosition);
-  mirrorCamera.lookAt(planeRefraction.position);
-  mirrorCamera.updateProjectionMatrix();
-  mirrorCamera.scale.set(12, 12, 12);
-}
+  // Reflete a direção de visão da câmera principal
+  const lookAt = new THREE.Vector3();
+  mainCamera.getWorldDirection(lookAt);
+  const reflectedLookAt = lookAt.clone().sub(
+    normal.clone().multiplyScalar(2 * normal.dot(lookAt))
+  );
 
+  // Atualiza a posição e orientação da câmera do espelho
+  mirrorCamera.position.copy(reflectedPosition);
+
+  // Corrige a direção da câmera refletida
+  const target = reflectedPosition.clone().add(reflectedLookAt);
+  mirrorCamera.lookAt(target);
+
+  // Ajusta o vetor "up" da câmera para evitar inversões
+  const cameraUp = mainCamera.up.clone();
+  const reflectedUp = cameraUp.sub(
+    normal.clone().multiplyScalar(2 * normal.dot(cameraUp))
+  );
+  mirrorCamera.up.copy(reflectedUp);
+
+  // Atualiza a matriz de projeção da câmera
+  mirrorCamera.updateProjectionMatrix();
+}
 
 function animate() {
   // Atualize os controles da câmera
@@ -154,12 +177,17 @@ function animate() {
   planeRefraction.material.uniforms.u_time.value += 0.01;
   planeRefraction.material.uniforms.u_cameraPosition.value.copy(camera.position);
 
+
+  planeRefraction.material.uniforms.u_depthFactor.value = 0.5;
+  // Atualize a câmera do espelho
+  updateMirrorCamera(camera, planeRefraction, mirrorCamera);
+
   // Temporariamente oculte o plano para evitar que ele reflita a si mesmo
   planeRefraction.visible = false;
 
-  // Renderize a cena para o renderTarget
+  // Renderize a cena para o renderTarget usando a mirrorCamera
   renderer.setRenderTarget(renderTarget);
-  renderer.render(scene, camera);
+  renderer.render(scene, mirrorCamera);
   renderer.setRenderTarget(null);
 
   // Torne o plano visível novamente
