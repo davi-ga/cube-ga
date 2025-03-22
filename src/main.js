@@ -145,7 +145,7 @@ camera.lookAt(cube.position);
 // Create a GUI for controlling parameters
 const gui = new dat.GUI();
 const params = {
-  opacity: 0.5, // Initial opacity value
+  opacity: 1.0, // Initial opacity value
 };
 
 // Add an opacity slider to the GUI
