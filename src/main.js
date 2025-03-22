@@ -1,44 +1,48 @@
+// Import necessary modules from Three.js
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import {createCube,createPlane} from './utils/objects.js';
-import {createControls} from './utils/controls.js';
-// import vertexShader from "./utils/shaders/vertex.glsl";
-// import fragmentShader from "./utils/shaders/fragment.glsl";
+import { createCube, createPlane } from './utils/objects.js';
+import { createControls } from './utils/controls.js';
+import * as dat from 'dat.gui';
 
+// Create a new Three.js scene
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
 
-const renderer = new THREE.WebGLRenderer();
-renderer.setSize( window.innerWidth, window.innerHeight );
-renderer.setAnimationLoop( animate );
-document.body.appendChild( renderer.domElement );
-
-const renderTarget = new THREE.WebGLRenderTarget(2048, 2048, {
-  minFilter: THREE.LinearFilter,
-  magFilter: THREE.LinearFilter,
-  format: THREE.RGBAFormat,
-});
-
-const mirrorCamera = new THREE.PerspectiveCamera(
-  75,
-  innerWidth + innerHeight / innerHeight - innerWidth,
-  1,
-  500
+// Set up the camera with a perspective projection
+const camera = new THREE.PerspectiveCamera(
+  75, // Field of view
+  window.innerWidth / window.innerHeight, // Aspect ratio
+  0.1, // Near clipping plane
+  1000 // Far clipping plane
 );
 
+// Create a WebGL renderer
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight); // Set the renderer size
+renderer.setAnimationLoop(animate); // Set the animation loop
+document.body.appendChild(renderer.domElement); // Append the renderer to the DOM
 
+// Create a render target for off-screen rendering
+const renderTarget = new THREE.WebGLRenderTarget(2048, 2048, {
+  minFilter: THREE.LinearFilter, // Minification filter
+  magFilter: THREE.LinearFilter, // Magnification filter
+  format: THREE.RGBAFormat, // Texture format
+});
+
+// Create camera controls
 const controls = createControls(camera, renderer);
 
+// Create the first cube and set its properties
 const cube = createCube(1, 1, 1);
+cube.material = new THREE.MeshBasicMaterial({ color: 0xff00ff }); // Set the cube's material color
+cube.position.set(-5, 0, 0); // Set the cube's position
+scene.add(cube); // Add the cube to the scene
 
-cube.material = new THREE.MeshBasicMaterial({ color: 0xff00ff});
-cube.position.set(-5, 0, 0);
-scene.add(cube);
-
+// Create the second cube and set its properties
 const cube2 = createCube(1, 1, 1);
-cube2.position.set(5, 0, 0)
-scene.add( cube2 );
+cube2.position.set(5, 0, 0); // Set the cube's position
+scene.add(cube2); // Add the cube to the scene
 
+// Vertex shader for the water effect
 const vertexShader = `
 precision mediump float;
 
@@ -50,14 +54,15 @@ void main() {
 }
 `;
 
-
+// Fragment shader for the water effect
 const fragmentShader = `
 precision mediump float;
 
-uniform sampler2D u_mirrorTexture; // Textura da cena renderizada
-uniform sampler2D u_waterTexture; // Textura da água
+uniform sampler2D u_mirrorTexture; // Rendered scene texture
+uniform sampler2D u_waterTexture; // Water texture
 uniform float u_time;
 uniform vec3 u_cameraPosition;
+uniform float u_opacity; // Opacity control
 
 in vec2 vUv; // GLSL 3.0 input variable
 out vec4 fragColor; // Output variable for fragment color
@@ -65,106 +70,106 @@ out vec4 fragColor; // Output variable for fragment color
 void main() {
     vec2 uv = vUv;
 
-    // Simule o deslocamento da textura
+    // Simulate texture displacement
     uv.x += sin(uv.y * 10.0 + u_time * 2.0) * 0.02;
     uv.y += cos(uv.x * 10.0 + u_time * 2.0) * 0.02;
 
-    // Calcule a direção da refração
+    // Calculate refraction direction
     vec3 viewDir = normalize(vec3(uv, 1.0) - u_cameraPosition);
-    vec3 normal = vec3(0.0, 0.0, 1.0); // Normal do plano
-    vec3 refractedDir = refract(viewDir, normal, 1.0 / 1.33); // Índice de refração da água
+    vec3 normal = vec3(0.0, 0.0, 1.0); // Plane normal
+    vec3 refractedDir = refract(viewDir, normal, 1.0 / 1.33); // Refraction index of water
 
-    // Ajuste as coordenadas UV com base na direção refratada
+    // Adjust UV coordinates based on refraction direction
     vec2 refractedUV = uv + refractedDir.xy * 0.05;
 
-    // Aplique a textura renderizada com o deslocamento e refração
+    // Apply the rendered scene texture with displacement and refraction
     vec4 sceneColor = texture(u_mirrorTexture, refractedUV);
 
-    // Aplique a textura da água
+    // Apply the water texture
     vec4 waterColor = texture(u_waterTexture, uv);
 
-    // Combine a textura da água com a textura renderizada
-    fragColor = mix(sceneColor, waterColor, 0.5); // Misture as cores (50% cada)
+    // Combine the water texture with the rendered scene texture
+    vec4 mixedColor = mix(sceneColor, waterColor, 0.5); // Blend colors (50% each)
+
+    // Adjust opacity
+    fragColor = vec4(mixedColor.rgb, u_opacity); // Apply opacity
 }
 `;
-const loader = new THREE.TextureLoader();
 
+// Load the water texture
+const loader = new THREE.TextureLoader();
 const waterTexture = loader.load(
-  "/water.png",
-  () => console.log("Textura carregada com sucesso!"),
-  undefined,
-  (err) => console.error("Erro ao carregar a textura:", err)
+  "/water.png", // Texture path
+  () => console.log("Texture loaded successfully!"), // On load callback
+  undefined, // On progress callback
+  (err) => console.error("Error loading texture:", err) // On error callback
 );
 
+// Create a plane geometry for the water effect
 const mirrorGeometry = new THREE.PlaneGeometry(10, 10);
 const planeRefraction = new THREE.Mesh(
   mirrorGeometry,
   new THREE.ShaderMaterial({
-    glslVersion: THREE.GLSL3,
-    vertexShader: vertexShader,
-    fragmentShader: fragmentShader,
+    glslVersion: THREE.GLSL3, // Use GLSL 3.0
+    vertexShader: vertexShader, // Vertex shader
+    fragmentShader: fragmentShader, // Fragment shader
+    transparent: true, // Enable transparency
     uniforms: {
-      u_mirrorTexture: { value: renderTarget.texture }, // Textura da cena renderizada
-      u_waterTexture: { value: waterTexture }, // Textura da água
-      u_time: { value: 5.0 },
-      u_cameraPosition: { value: camera.position },
+      u_mirrorTexture: { value: renderTarget.texture }, // Rendered scene texture
+      u_waterTexture: { value: waterTexture }, // Water texture
+      u_time: { value: 5.0 }, // Time uniform
+      u_cameraPosition: { value: camera.position }, // Camera position uniform
+      u_opacity: { value: 1.0}, // Opacity uniform
     },
   })
 );
 
-planeRefraction.position.set(0, 0, 0);
-planeRefraction.rotateY(Math.PI/2);
+planeRefraction.position.set(0, 0, 0); // Set the plane's position
+planeRefraction.rotateY(Math.PI / 2); // Rotate the plane
 
-scene.add(planeRefraction);
+scene.add(planeRefraction); // Add the plane to the scene
 
+// Add ambient light to the scene
+const ambientLight = new THREE.AmbientLight(0xffffff, 1); // Set light color and intensity
+scene.add(ambientLight);
 
-const ambientLight = new THREE.AmbientLight( 0xffffff, 1 ); // Ajuste a intensidade da luz ambiente
-scene.add( ambientLight );
+// Add directional light to the scene
+const directionalLight = new THREE.DirectionalLight(0xffffff, 1); // Set light color and intensity
+directionalLight.position.set(5, 10, 7.5); // Set light position
+scene.add(directionalLight);
 
-const directionalLight = new THREE.DirectionalLight( 0xffffff, 1 ); // Adicione uma luz direcional
-directionalLight.position.set( 5, 10, 7.5 );
-scene.add( directionalLight );
-
-camera.position.set(cube.position.x+15, cube.position.y , cube.position.z);
+// Set the camera's initial position and orientation
+camera.position.set(cube.position.x + 15, cube.position.y, cube.position.z);
 camera.lookAt(cube.position);
 
-function updateMirrorCamera(mainCamera, mirror, mirrorCamera) {
-  let normal = new THREE.Vector3(0, 0, 1); // Normal of the Plane
-  normal.applyQuaternion(planeRefraction.quaternion); // Adjust the rotation of the plane
-  let d = normal.dot(planeRefraction.position);
+// Create a GUI for controlling parameters
+const gui = new dat.GUI();
+const params = {
+  opacity: 0.5, // Initial opacity value
+};
 
-  // Reflection of the Camera Position
-  let mirroredPosition = camera.position.clone();
-  mirroredPosition.sub(
-    normal.clone().multiplyScalar(2 * (camera.position.dot(normal) - d))
-  );
+// Add an opacity slider to the GUI
+gui.add(params, 'opacity', 0, 1, 0.01).name('Opacity').onChange((value) => {
+  planeRefraction.material.uniforms.u_opacity.value = value; // Update opacity uniform
+});
 
-  mirrorCamera.position.copy(mirroredPosition);
-  mirrorCamera.lookAt(planeRefraction.position);
-  mirrorCamera.updateProjectionMatrix();
-  mirrorCamera.scale.set(12, 12, 12);
-}
-
-
+// Animation loop
 function animate() {
-  // Atualize os controles da câmera
-  controls.update();
+  controls.update(); // Update camera controls
 
-  // Atualize os uniformes do shader
-  planeRefraction.material.uniforms.u_time.value += 0.01;
-  planeRefraction.material.uniforms.u_cameraPosition.value.copy(camera.position);
+  // Update shader uniforms
+  planeRefraction.material.uniforms.u_time.value += 0.01; // Increment time
+  planeRefraction.material.uniforms.u_cameraPosition.value.copy(camera.position); // Update camera position
 
-  // Temporariamente oculte o plano para evitar que ele reflita a si mesmo
-  planeRefraction.visible = false;
+  planeRefraction.visible = false; // Hide the plane during off-screen rendering
 
-  // Renderize a cena para o renderTarget
+  // Render the scene to the render target
   renderer.setRenderTarget(renderTarget);
   renderer.render(scene, camera);
-  renderer.setRenderTarget(null);
+  renderer.setRenderTarget(null); // Reset render target
 
-  // Torne o plano visível novamente
-  planeRefraction.visible = true;
+  planeRefraction.visible = true; // Show the plane again
 
-  // Renderize a cena principal
+  // Render the final scene
   renderer.render(scene, camera);
 }
