@@ -30,15 +30,37 @@ const renderTarget = new THREE.WebGLRenderTarget(2048, 2048, {
 
 // Create camera controls
 const controls = createControls(camera, renderer);
+const loader = new THREE.TextureLoader();
+
+const waterTexture = loader.load(
+  "/water.png", // Texture path
+  () => console.log("Texture loaded successfully!"), // On load callback
+  undefined, // On progress callback
+  (err) => console.error("Error loading texture:", err) // On error callback
+);
+const dirtTexture = loader.load(
+  "/dirt.jpg", // Texture path
+  () => console.log("Texture loaded successfully!"), // On load callback
+  undefined, // On progress callback
+  (err) => console.error("Error loading texture:", err) // On error callback
+);
+
+const rockTexture = loader.load(
+  "/rock.jpg", // Texture path
+  () => console.log("Texture loaded successfully!"), // On load callback
+  undefined, // On progress callback
+  (err) => console.error("Error loading texture:", err) // On error callback
+);
 
 // Create the first cube and set its properties
 const cube = createCube(1, 1, 1);
-cube.material = new THREE.MeshBasicMaterial({ color: 0xff00ff }); // Set the cube's material color
+cube.material = new THREE.MeshBasicMaterial({ map: dirtTexture }); // Set the cube's material to use terrainTexture
 cube.position.set(-5, 0, 0); // Set the cube's position
 scene.add(cube); // Add the cube to the scene
 
 // Create the second cube and set its properties
 const cube2 = createCube(1, 1, 1);
+cube2.material = new THREE.MeshBasicMaterial({ map: rockTexture }); // Set the cube's material to use rockTexture
 cube2.position.set(5, 0, 0); // Set the cube's position
 scene.add(cube2); // Add the cube to the scene
 
@@ -97,13 +119,7 @@ void main() {
 `;
 
 // Load the water texture
-const loader = new THREE.TextureLoader();
-const waterTexture = loader.load(
-  "/water.png", // Texture path
-  () => console.log("Texture loaded successfully!"), // On load callback
-  undefined, // On progress callback
-  (err) => console.error("Error loading texture:", err) // On error callback
-);
+
 
 // Create a plane geometry for the water effect
 const mirrorGeometry = new THREE.PlaneGeometry(10, 10);
