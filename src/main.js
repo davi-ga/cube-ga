@@ -118,9 +118,6 @@ void main() {
 }
 `;
 
-// Load the water texture
-
-
 // Create a plane geometry for the water effect
 const mirrorGeometry = new THREE.PlaneGeometry(10, 10);
 const planeRefraction = new THREE.Mesh(
